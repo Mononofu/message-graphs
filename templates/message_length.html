@@ -1,0 +1,25 @@
+{% extends "index.html" %}
+
+{% block content %}
+
+<ul>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Average Message Length</th>
+      <th># Messages</th>
+    </tr>
+  </thead>
+  <tbody>
+{% for name, len in msg_avg_len %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ len }}</td>
+      <td>{{ msg_cnt[name] }}</td>
+    </tr>
+{% endfor %}
+  </tbody>
+</table>
+
+{% endblock%}

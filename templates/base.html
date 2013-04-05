@@ -1,3 +1,15 @@
+{% set navigation_bar = [
+  (None, 'Sidebar'),
+  ('/', 'Home'),
+  ('/download/', 'Download Messages'),
+  ('/drop/', 'Clear Messages'),
+  (None, 'Statistics'),
+  ('/stats/partners/', 'Conversation Partners'),
+  ('/stats/messages/count/', 'Message Count'),
+  ('/stats/messages/length/', 'Message Length')
+] -%}
+{% set active_page = active_page|default('/') -%}
+
 <!DOCTYPE html>
 <html xmlns:fb="http://ogp.me/ns/fb#" lang="en">
   <head>
@@ -35,21 +47,6 @@
     <![endif]-->
 
     <!-- Fav and touch icons -->
-
-    <!-- These are Open Graph tags.  They add meta data to your  -->
-    <!-- site that facebook uses when your content is shared     -->
-    <!-- over facebook.  You should fill these tags in with      -->
-    <!-- your data.  To learn more about Open Graph, visit       -->
-    <!-- 'https://developers.facebook.com/docs/opengraph/'       -->
-    <meta content="" property="og:title" />
-    <meta content="" property="og:type" />
-    <meta content="" property="og:url" />
-    <meta content="" property="og:image" />
-    <meta content="" property="og:site_name" />
-    <meta property="og:description" content="My First App" />
-    <meta content="{{app_id}}" property="fb:app_id" />
-
-
   </head>
 
   <body>
@@ -84,21 +81,13 @@
         <div class="span3">
           <div class="well sidebar-nav">
             <ul class="nav nav-list">
-              <li class="nav-header">Sidebar</li>
-              <li class="active"><a href="/">Home</a></li>
-              <li><a href="/download">Download Messages</a></li>
-              <li><a href="/drop">Clear Messages</a></li>
-              <li class="nav-header">Statistics</li>
-              <li><a href="/partners">Conversation Partners</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li class="nav-header">Sidebar</li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
-              <li><a href="#">Link</a></li>
+              {% for href, caption in navigation_bar %}
+                {% if href == None %}
+                <li class="nav-header">{{ caption|e }}</li>
+                {% else %}
+                <li{% if href == active_page %} class="active"{% endif %}><a href="{{ href|e }}">{{ caption|e }}</a></li>
+                {% endif %}
+              {% endfor %}
             </ul>
           </div><!--/.well -->
         </div><!--/span-->
