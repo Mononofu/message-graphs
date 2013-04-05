@@ -1,0 +1,12 @@
+{% extends "index.html" %}
+
+
+{% block content %}
+
+<ul>
+{% for partner in partners %}
+  <li>{{ partner }}</li>
+{% endfor %}
+</ul>
+
+{% endblock%}
