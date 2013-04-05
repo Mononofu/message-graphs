@@ -1,0 +1,25 @@
+{% extends "index.html" %}
+
+{% block content %}
+
+<ul>
+<table class="table table-striped">
+  <thead>
+    <tr>
+      <th>Name</th>
+      <th>Average Word Length</th>
+      <th># Words</th>
+    </tr>
+  </thead>
+  <tbody>
+{% for name, len in word_avg_len %}
+    <tr>
+      <td>{{ name }}</td>
+      <td>{{ "%.3f"|format(len) }}</td>
+      <td>{{ word_cnt[name] }}</td>
+    </tr>
+{% endfor %}
+  </tbody>
+</table>
+
+{% endblock%}

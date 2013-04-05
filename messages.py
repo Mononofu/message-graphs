@@ -4,11 +4,13 @@ import logging
 import random
 import urlparse
 from functools import wraps
+from collections import defaultdict
+import operator
 
 from flask import request, redirect, render_template, url_for, flash, session, abort
 
 from common import pool, app
-from fb_auth import get_token, fb_call
+from fb_auth import fb_call
 from conf import Config
 from MessageFetcher import *
 from models import *
@@ -57,26 +59,31 @@ def fb_login():
   me = fb_call('me', args={'access_token': token,
                            'fields': 'id, name'})
 
-  u = User.all().filter("id =", me["id"]).get()
+  u = User.all().filter("fb_id =", me["id"]).get()
   if u:
     u.access_token = token
     u.name = me["name"]
+    u.fb_id = me["id"]
     u.put()
   else:
     # new user, create object
-    u = User(name=me['name'], id=me['id'], access_token=token)
+    u = User(name=me['name'], fb_id=me['id'], access_token=token)
     u.put()
   session['user_key'] = str(u.key())
   return redirect(url_for('index'))
 
 
+def render(template, **kwargs):
+  return render_template(template, active_page=request.path, **kwargs)
+
+
 @app.route('/')
 @require_login()
 def index(user):
+  logging.info(request.path)
   #me = fb_call('me', args={'access_token': user.access_token})
 
-  return render_template('index.html', app_id=FB_APP_ID, user_name=user.name)
-
+  return render('index.html', user_name=user.name)
 
 
 @app.route('/drop/')
@@ -92,28 +99,110 @@ def drop():
 @app.route('/download/', methods=['GET'])
 @require_login()
 def download(user):
-  m = MessageFetcher(user.name)
+  m = MessageFetcher(user)
   m.run()
 
   flash("Started download")
   return redirect(url_for('index'))
 
 
-@app.route('/partners/')
+@app.route('/stats/partners/')
 @require_login()
 def partners(user):
-  partners = []
-  for proj in db.Query(Message, projection=['conversation_partner'],
-                       distinct=True):
-    partners.append(proj.conversation_partner)
-  return render_template('partners.html', partners=partners, app_id=FB_APP_ID,
-                         user_name=user.name)
+  partners = memcache.get("partners" + user.fb_id)
+
+  if not partners:
+    partners = []
+    for proj in db.Query(Message, projection=['conversation_partner'],
+                         distinct=True).filter("owner =", user):
+      partners.append(proj.conversation_partner)
+    memcache.set(key="partners" + user.fb_id, value=partners)
+
+  return render('partners.html', partners=partners, user_name=user.name)
+
+
+@app.route('/stats/messages/count/')
+@require_login()
+def message_count(user):
+  msg_cnt_lst = memcache.get("msg_cnt_lst" + user.fb_id)
+
+  if not msg_cnt_lst:
+    msg_cnt = defaultdict(int)
+    for msg in Message.all():
+      msg_cnt[msg.conversation_partner] += 1
+
+    msg_cnt_lst = sorted(msg_cnt.iteritems(),
+                         key=operator.itemgetter(1), reverse=True)
+    memcache.set(key="msg_cnt_lst" + user.fb_id, value=msg_cnt_lst)
+
+  return render('message_count.html', partners=msg_cnt_lst,
+                user_name=user.name)
+
+
+@app.route('/stats/messages/length/')
+@require_login()
+def message_length(user):
+  msg_avg_len = memcache.get("msg_avg_len" + user.fb_id)
+  msg_cnt = memcache.get("msg_cnt" + user.fb_id)
+
+  if not msg_avg_len or not msg_cnt:
+    msg_len = defaultdict(int)
+    msg_cnt = defaultdict(int)
+    for msg in Message.all():
+      msg_len[msg.conversation_partner] += len(msg.content)
+      msg_cnt[msg.conversation_partner] += 1
+
+    msg_avg_len = {}
+    for name, count in msg_cnt.iteritems():
+      if count >= 10:
+        msg_avg_len[name] = msg_len[name] / count
+
+    msg_avg_len = sorted(msg_avg_len.iteritems(),
+                         key=operator.itemgetter(1), reverse=True)
+    memcache.set(key="msg_avg_len" + user.fb_id, value=msg_avg_len)
+    memcache.set(key="msg_cnt" + user.fb_id, value=msg_cnt)
+
+  return render('message_length.html', msg_avg_len=msg_avg_len,
+                msg_cnt=msg_cnt, user_name=user.name)
+
+
+@app.route('/stats/words/length/')
+@require_login()
+def word_length(user):
+  word_avg_len = memcache.get("word_avg_len" + user.fb_id)
+  word_cnt = memcache.get("word_cnt" + user.fb_id)
+
+  if not word_avg_len or not word_cnt:
+    word_len = defaultdict(int)
+    word_cnt = defaultdict(int)
+    msg_cnt = defaultdict(int)
+
+    for msg in Message.all():
+      for word in msg.content.split(" "):
+        word_len[msg.conversation_partner] += len(word)
+        word_cnt[msg.conversation_partner] += 1
+
+      msg_cnt[msg.conversation_partner] += 1
+
+    word_avg_len = {}
+    for name, count in word_cnt.iteritems():
+      if msg_cnt[name] >= 10:
+        word_avg_len[name] = (1.0 * word_len[name]) / count
+
+    word_avg_len = sorted(word_avg_len.iteritems(),
+                          key=operator.itemgetter(1), reverse=True)
+    memcache.set(key="word_avg_len" + user.fb_id, value=word_avg_len)
+    memcache.set(key="word_cnt" + user.fb_id, value=word_cnt)
+
+  return render('word_length.html', word_avg_len=word_avg_len,
+                word_cnt=word_cnt, user_name=user.name)
 
 
 @app.route('/logout/')
 @require_login()
 def logout(user):
   session.pop('user_key', None)
+  db.delete(user)
   return redirect(url_for('index'))
 
 

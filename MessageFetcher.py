@@ -3,7 +3,6 @@ import logging
 import json
 import datetime
 dt = datetime.datetime
-from google.appengine.api import memcache
 from google.appengine.ext import deferred
 
 from common import pool
@@ -11,14 +10,13 @@ from models import *
 
 
 class MessageFetcher(object):
-  def __init__(self, user_name):
-    self.user_name = user_name
+  def __init__(self, user):
+    self.user = user
     self.deleted_counter = 0
 
   def run(self):
-    access_token = memcache.get('access_token')
     request_url = ("https://graph.facebook.com/me/inbox" +
-                   "?format=json&access_token=%s&limit=200" % access_token)
+                   "?format=json&access_token=%s&limit=200" % self.user.access_token)
     deferred.defer(self._continue, request_url)
 
   def _continue(self, next_url):
@@ -33,39 +31,42 @@ class MessageFetcher(object):
         continue
 
       contact = conversation["to"]["data"][0]["name"]
-      if contact == self.user_name:
+      contact_id = conversation["to"]["data"][0]["id"]
+      if contact == self.user.name:
         if len(conversation["to"]["data"]) > 1:
           for other in conversation["to"]["data"][1:]:
-            if other["name"] != self.user_name:
+            if other["name"] != self.user.name:
               contact = other["name"]
+              contact_id = other["id"]
               break
         else:
           # seems we have a deleted account
           contact = "deleted_%d" % self.deleted_counter
+          contact_id = "-1"
           self.deleted_counter += 1
 
       comments = conversation["comments"]
-      self._parse_messages(contact, comments["data"])
+      self._parse_messages(contact, contact_id, comments["data"])
 
       if "paging" in comments:
         next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-        deferred.defer(self._parse_thread, contact, next_page)
+        deferred.defer(self._parse_thread, contact, contact_id, next_page)
 
     if "paging" in j:
       request_url = j["paging"]["next"].replace("limit=25", "limit=200")
       deferred.defer(self._continue, request_url)
 
-  def _parse_thread(self, partner, next_page):
+  def _parse_thread(self, partner, partner_id, next_page):
     logging.info(next_page)
     time.sleep(2)
     comments = json.loads(pool.request('GET', next_page).data)
-    self._parse_messages(partner, comments["data"])
+    self._parse_messages(partner, partner_id, comments["data"])
 
     if "paging" in comments:
       next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-      deferred.defer(self._parse_thread, partner, next_page)
+      deferred.defer(self._parse_thread, partner, partner_id, next_page)
 
-  def _parse_messages(self, partner, messages):
+  def _parse_messages(self, partner, partner_id, messages):
     for message in messages:
       if "message" not in message:
         continue
@@ -75,12 +76,17 @@ class MessageFetcher(object):
                              "%Y-%m-%dT%H:%M:%S+0000")
 
       author = partner
+      author_id = partner_id
       if message["from"]:
         author = message["from"]["name"]
+        author_id = message["from"]["id"]
 
       msg = Message(
+          owner=self.user,
           conversation_partner=partner,
+          conversation_partner_id=partner_id,
           author=author,
+          author_id=author_id,
           content=text,
           creation_time=time_obj)
       msg.put()
