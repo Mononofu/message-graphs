@@ -7,7 +7,9 @@
   ('/stats/partners/', 'Conversation Partners'),
   ('/stats/messages/count/', 'Message Count'),
   ('/stats/messages/length/', 'Message Length'),
-  ('/stats/words/length/', 'Word Length')
+  ('/stats/words/length/', 'Word Length'),
+  (None, 'Show'),
+  ('/show/words', '... Words')
 ] -%}
 {% set active_page = active_page|default('/') -%}
 
@@ -60,7 +62,7 @@
             <span class="icon-bar"></span>
             <span class="icon-bar"></span>
           </button>
-          <a class="brand" href="#">Project name</a>
+          <a class="brand" href="#">Message Graphs</a>
           <div class="nav-collapse collapse">
             <p class="navbar-text pull-right">
               {% block login %}

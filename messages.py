@@ -6,6 +6,7 @@ import urlparse
 from functools import wraps
 from collections import defaultdict
 import operator
+import re
 
 from flask import request, redirect, render_template, url_for, flash, session, abort
 
@@ -178,9 +179,11 @@ def word_length(user):
     msg_cnt = defaultdict(int)
 
     for msg in Message.all():
+      url_re = """((http[s]?|ftp):\/)?\/?([^:\/\s]+)(:([^\/]*))?((\/\w+)*\/)([\w\-\.]+[^#?\s]+)(\?([^#]*))?(#(.*))?"""
       for word in msg.content.split(" "):
-        word_len[msg.conversation_partner] += len(word)
-        word_cnt[msg.conversation_partner] += 1
+        if not re.match(url_re, word):
+          word_len[msg.conversation_partner] += len(word)
+          word_cnt[msg.conversation_partner] += 1
 
       msg_cnt[msg.conversation_partner] += 1
 
@@ -196,6 +199,23 @@ def word_length(user):
 
   return render('word_length.html', word_avg_len=word_avg_len,
                 word_cnt=word_cnt, user_name=user.name)
+
+
+@app.route('/show/words/<fb_id>/')
+@require_login()
+def show_words_for(user, fb_id):
+  word_list = memcache.get("word_list_" + fb_id + "-" + user.fb_id)
+
+  if not word_list:
+    url_re = """((http[s]?|ftp):\/)?\/?([^:\/\s]+)(:([^\/]*))?((\/\w+)*\/)([\w\-\.]+[^#?\s]+)(\?([^#]*))?(#(.*))?"""
+    word_list = []
+    for msg in Message.all().filter("conversation_partner_id =", fb_id):
+      for word in msg.content.split(" "):
+        if not re.match(url_re, word):
+          word_list.append(word)
+    memcache.put("word_list_" + fb_id + "-" + user.fb_id, word_list)
+
+  return render('show.html', entries=word_list, user_name=user.name)
 
 
 @app.route('/logout/')
