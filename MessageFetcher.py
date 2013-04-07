@@ -15,6 +15,8 @@ class MessageFetcher(object):
     self.deleted_counter = 0
 
   def run(self):
+    self.newest_msg = Message.all().order("-creation_time").get().creation_time
+
     request_url = ("https://graph.facebook.com/me/inbox" +
                    "?format=json&access_token=%s&limit=200" % self.user.access_token)
     deferred.defer(self._continue, request_url)
@@ -46,9 +48,9 @@ class MessageFetcher(object):
           self.deleted_counter += 1
 
       comments = conversation["comments"]
-      self._parse_messages(contact, contact_id, comments["data"])
+      new_msgs_left = self._parse_messages(contact, contact_id, comments["data"])
 
-      if "paging" in comments:
+      if new_msgs_left and "paging" in comments:
         next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
         deferred.defer(self._parse_thread, contact, contact_id, next_page)
 
@@ -60,13 +62,15 @@ class MessageFetcher(object):
     logging.info(next_page)
     time.sleep(2)
     comments = json.loads(pool.request('GET', next_page).data)
-    self._parse_messages(partner, partner_id, comments["data"])
+    new_msgs_left = self._parse_messages(partner, partner_id, comments["data"])
 
-    if "paging" in comments:
+    if new_msgs_left and "paging" in comments:
       next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
       deferred.defer(self._parse_thread, partner, partner_id, next_page)
 
   def _parse_messages(self, partner, partner_id, messages):
+    new_msgs_left = True
+
     for message in messages:
       if "message" not in message:
         continue
@@ -74,6 +78,10 @@ class MessageFetcher(object):
       text = message["message"]
       time_obj = dt.strptime(message["created_time"],
                              "%Y-%m-%dT%H:%M:%S+0000")
+
+      if time_obj < self.newest_msg:
+        new_msgs_left = False
+        continue
 
       author = partner
       author_id = partner_id
@@ -90,3 +98,5 @@ class MessageFetcher(object):
           content=text,
           creation_time=time_obj)
       msg.put()
+
+    return new_msgs_left
