@@ -12,6 +12,7 @@
   (None, 'Graphs'),
   ('/graph/words/monthly/', 'Words / Month'),
   ('/graph/words/monthly/user/', 'Words / Month per User'),
+  ('/graph/words/punchcard/', 'Wordcount Punchcard'),
   (None, 'Show'),
   ('/show/words/', '... Words')
 ] -%}
@@ -28,7 +29,10 @@
 
     <!-- Le styles -->
     <link href="/assets/css/bootstrap.css" rel="stylesheet">
+    {% block style %}
     <link href="/assets/css/nv.d3.css" rel="stylesheet">
+    {% endblock %}
+    <link href="/assets/css/custom.css" rel="stylesheet">
     <style type="text/css">
       body {
         padding-top: 60px;

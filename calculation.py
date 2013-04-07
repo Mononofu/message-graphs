@@ -31,21 +31,30 @@ def calc_message_stats(user):
   msg_cnt = memcache.get("msg_cnt" + user.fb_id)
   words_per_month = memcache.get("words_per_month" + user.fb_id)
   msgs_per_month = memcache.get("msgs_per_month" + user.fb_id)
+  words_per_hour = memcache.get("words_per_hour" + user.fb_id)
+  msgs_per_hour = memcache.get("msgs_per_hour" + user.fb_id)
 
-  if not msg_avg_len or not msg_cnt or not words_per_month or not msgs_per_month:
+  if (not msg_avg_len or not msg_cnt or not words_per_month or
+     not msgs_per_month or not words_per_hour):
     msg_len = defaultdict(int)
     msg_cnt = defaultdict(int)
     words_per_month = defaultdict(lambda: defaultdict(int))
     msgs_per_month = defaultdict(lambda: defaultdict(int))
+    words_per_hour = defaultdict(lambda: defaultdict(int))
+    msgs_per_hour = defaultdict(lambda: defaultdict(int))
 
     for msg in Message.all():
       msg_len[msg.conversation_partner] += len(msg.content)
       msg_cnt[msg.conversation_partner] += 1
 
       month = msg.creation_time.strftime("%Y.%m")
-      words_per_month[month][msg.conversation_partner] += len(
-          get_proper_words(msg.content.split(" ")))
+      weekday_hour = msg.creation_time.strftime("%w-%H")
+      num_words = len(get_proper_words(msg.content.split(" ")))
+
+      words_per_month[month][msg.conversation_partner] += num_words
       msgs_per_month[month][msg.conversation_partner] += 1
+      words_per_hour[weekday_hour][msg.conversation_partner] += num_words
+      msgs_per_hour[weekday_hour][msg.conversation_partner] += 1
 
     msg_avg_len = {}
     for name, count in msg_cnt.iteritems():
@@ -60,10 +69,20 @@ def calc_message_stats(user):
     for month, msg_dict in msgs_per_month.iteritems():
       msgs_per_month_dict[month] = dict(msg_dict)
 
+    words_per_hour_dict = {}
+    for hour, word_dict in words_per_hour.iteritems():
+      words_per_hour_dict[hour] = dict(word_dict)
+
+    msgs_per_hour_dict = {}
+    for hour, msg_dict in msgs_per_month.iteritems():
+      msgs_per_hour_dict[hour] = dict(msg_dict)
+
     memcache.set(key="msg_avg_len" + user.fb_id, value=msg_avg_len)
     memcache.set(key="msg_cnt" + user.fb_id, value=msg_cnt)
     memcache.set(key="words_per_month" + user.fb_id, value=words_per_month_dict)
     memcache.set(key="msgs_per_month" + user.fb_id, value=msgs_per_month_dict)
+    memcache.set(key="words_per_hour" + user.fb_id, value=words_per_hour_dict)
+    memcache.set(key="msgs_per_hour" + user.fb_id, value=msgs_per_hour_dict)
 
 
 # dictionary of avergae message length per user (for those with at least 10 msgs)
@@ -88,6 +107,18 @@ def get_words_per_month(user):
 def get_msgs_per_month(user):
   calc_message_stats(user)
   return memcache.get("msgs_per_month" + user.fb_id)
+
+
+# Map[Day_Hour, Map[User, WordCount]]
+def get_words_per_hour(user):
+  calc_message_stats(user)
+  return memcache.get("words_per_hour" + user.fb_id)
+
+
+# Map[Day_Hour, Map[User, MsgCount]]
+def get_msgs_per_hour(user):
+  calc_message_stats(user)
+  return memcache.get("msgs_per_hour" + user.fb_id)
 
 
 def calc_word_stats(user):
