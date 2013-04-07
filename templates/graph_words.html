@@ -3,42 +3,49 @@
 {% block content %}
 
 <div id='chart'>
-  <svg style='height:1000px'> </svg>
+  <svg style='height:600px'> </svg>
 </div>
 
 <script>
 
  nv.addGraph(function() {
-    var chart = nv.models.multiBarChart();
+  var chart = nv.models.lineWithFocusChart();
 
-    chart.xAxis
+  chart.xAxis
         .axisLabel('Month')
-        .tickFormat(d3.format(''));
+        .tickFormat(function(d) {
+          return d3.time.format('%B %Y')(new Date(d * 1000));
+        });
 
-    chart.yAxis
+  chart.x2Axis
+        .tickFormat(function(d) {
+          return d3.time.format('%B %Y')(new Date(d * 1000));
+        });
+
+  chart.yAxis
         .axisLabel('# Word')
        .tickFormat(d3.format('.0f'));
 
-   d3.select('#chart svg')
+  d3.select('#chart svg')
        .datum(words_per_month())
      .transition().duration(500)
        .call(chart);
 
-   nv.utils.windowResize(function() { d3.select('#chart svg').call(chart) });
+  nv.utils.windowResize(function() { d3.select('#chart svg').call(chart) });
 
-   return chart;
+  return chart;
  });
 
 function words_per_month() {
   return [
-{% for name, word_list in words %}
   {
        values: [
-        {% for word, count in word_list %}{{ count }}, {% endfor %}
+        {% for month, count in words %}
+          {x: {{month}}, y: {{ count }} },
+        {% endfor %}
        ],
-       key: '{{ name }}'
-     },
-{% endfor %}
+       key: '# Words'
+     }
   ];
 }
 

@@ -88,3 +88,42 @@ def get_words_per_month(user):
 def get_msgs_per_month(user):
   calc_message_stats(user)
   return memcache.get("msgs_per_month" + user.fb_id)
+
+
+def calc_word_stats(user):
+  word_avg_len = memcache.get("word_avg_len" + user.fb_id)
+  word_cnt = memcache.get("word_cnt" + user.fb_id)
+
+  if not word_avg_len or not word_cnt:
+    word_len = defaultdict(int)
+    word_cnt = defaultdict(int)
+    msg_cnt = defaultdict(int)
+
+    for msg in Message.all():
+      url_re = """((http[s]?|ftp):\/)?\/?([^:\/\s]+)(:([^\/]*))?((\/\w+)*\/)([\w\-\.]+[^#?\s]+)(\?([^#]*))?(#(.*))?"""
+      for word in msg.content.split(" "):
+        if not re.match(url_re, word):
+          word_len[msg.conversation_partner] += len(word)
+          word_cnt[msg.conversation_partner] += 1
+
+      msg_cnt[msg.conversation_partner] += 1
+
+    word_avg_len = {}
+    for name, count in word_cnt.iteritems():
+      if msg_cnt[name] >= 10:
+        word_avg_len[name] = (1.0 * word_len[name]) / count
+
+    memcache.set(key="word_avg_len" + user.fb_id, value=word_avg_len)
+    memcache.set(key="word_cnt" + user.fb_id, value=word_cnt)
+
+
+# average length of words by user
+def get_word_avg_len(user):
+  calc_word_stats(user)
+  return memcache.get("word_avg_len" + user.fb_id)
+
+
+# word count by user
+def get_word_cnt(user):
+  calc_word_stats(user)
+  return memcache.get("word_cnt" + user.fb_id)
