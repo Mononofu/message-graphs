@@ -3,7 +3,7 @@
 {% block content %}
 
 <div id='chart'>
-  <svg style='height:800px'> </svg>
+  <svg style='height:500px'> </svg>
 </div>
 
 <script>
@@ -22,6 +22,7 @@
        .tickFormat(d3.format('.0f'));
 
   chart.showLegend(false);
+  chart.stacked(true);
 
   d3.select('#chart svg')
        .datum(words_per_month())

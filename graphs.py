@@ -3,6 +3,7 @@ from calculation import *
 import time
 import operator
 import datetime
+import logging
 dt = datetime.datetime
 
 
@@ -30,7 +31,8 @@ def words_per_month_user(user):
   words_per_month_toplist = defaultdict(lambda: defaultdict(int))
 
   for month, partners in words_per_month.iteritems():
-    top_contacts = sorted(partners.iteritems(), key=operator.itemgetter(1))[:3]
+    top_contacts = sorted(partners.iteritems(), key=operator.itemgetter(1), reverse=True)
+    logging.info(top_contacts)
     epoch = time.mktime(dt.strptime(month, "%Y.%m").timetuple())
     for contact, num_counts in top_contacts:
         words_per_month_toplist[contact][epoch] = num_counts

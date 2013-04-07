@@ -18,7 +18,7 @@ def message_count(user):
                        key=operator.itemgetter(1), reverse=True)
 
   return render('message_count.html', partners=msg_cnt_lst,
-                user_name=user.name)
+                desc="# Messages", user_name=user.name)
 
 
 @app.route('/stats/messages/length/')
@@ -31,6 +31,17 @@ def message_length(user):
 
   return render('message_length.html', msg_avg_len=msg_avg_len_lst,
                 msg_cnt=msg_cnt, user_name=user.name)
+
+
+@app.route('/stats/words/count/')
+@require_login()
+def word_count(user):
+  word_cnt = get_word_cnt(user)
+  word_cnt_lst = sorted(word_cnt.iteritems(),
+                        key=operator.itemgetter(1), reverse=True)
+
+  return render('message_count.html', partners=word_cnt_lst,
+                desc="# Words", user_name=user.name)
 
 
 @app.route('/stats/words/length/')
