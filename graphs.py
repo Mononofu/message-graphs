@@ -22,22 +22,24 @@ def words_per_month(user):
   return render('graph_words.html', words=wordcount_per_month, user_name=user.name)
 
 
-@app.route('/graph/messages/monthly/user')
+@app.route('/graph/words/monthly/user/')
 @require_login()
-def messages_per_month_user(user):
+def words_per_month_user(user):
   words_per_month = get_words_per_month(user)
 
   words_per_month_toplist = defaultdict(lambda: defaultdict(int))
 
   for month, partners in words_per_month.iteritems():
-    top_contacts = sorted(partners.iteritems(), key=operator.itemgetter(1))[:5]
+    top_contacts = sorted(partners.iteritems(), key=operator.itemgetter(1))[:3]
+    epoch = time.mktime(dt.strptime(month, "%Y.%m").timetuple())
     for contact, num_counts in top_contacts:
-        words_per_month_toplist[contact][month] = num_counts
+        words_per_month_toplist[contact][epoch] = num_counts
 
   for contact in words_per_month_toplist.iterkeys():
     for month in words_per_month.iterkeys():
-      if not month in words_per_month_toplist[contact]:
-        words_per_month_toplist[contact][month] = 0
+      epoch = time.mktime(dt.strptime(month, "%Y.%m").timetuple())
+      if not epoch in words_per_month_toplist[contact]:
+        words_per_month_toplist[contact][epoch] = 0
 
   for contact in words_per_month_toplist.iterkeys():
     words_per_month_toplist[contact] = sorted(words_per_month_toplist[contact].iteritems(),
@@ -46,4 +48,4 @@ def messages_per_month_user(user):
   words_per_month = sorted(words_per_month_toplist.iteritems(),
                            key=operator.itemgetter(0), reverse=True)
 
-  return render('graph_words.html', words=words_per_month, user_name=user.name)
+  return render('graph_words_per_user.html', words=words_per_month, user_name=user.name)
