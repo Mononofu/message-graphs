@@ -9,12 +9,14 @@ import operator
 import re
 
 from flask import request, redirect, render_template, url_for, flash, session, abort
+from werkzeug_debugger_appengine import get_debugged_app
 
 from common import pool, app
 from fb_auth import fb_call
 from conf import Config
 from MessageFetcher import *
 from models import *
+from calculation import *
 
 from google.appengine.api import memcache
 
@@ -32,10 +34,15 @@ def require_login():
         oauth_url_code = "https://www.facebook.com/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=read_mailbox" % (FB_APP_ID, "http://localhost:8888/fb_login", rand_state)
         session["state"] = rand_state
         return redirect(oauth_url_code)
-      return f(*args, user=User.get(session['user_key']), **kwargs)
+
+      user = User.get(session['user_key'])
+      if not user:
+        session.pop('user_key', None)
+        return redirect(url_for('index'))
+
+      return f(*args, user=user, **kwargs)
     return wrapped
   return wrapper
-
 
 
 @app.route('/fb_login/')
@@ -110,31 +117,16 @@ def download(user):
 @app.route('/stats/partners/')
 @require_login()
 def partners(user):
-  partners = memcache.get("partners" + user.fb_id)
-
-  if not partners:
-    partners = []
-    for proj in db.Query(Message, projection=['conversation_partner'],
-                         distinct=True).filter("owner =", user):
-      partners.append(proj.conversation_partner)
-    memcache.set(key="partners" + user.fb_id, value=partners)
-
+  partners = chat_partners(user)
   return render('partners.html', partners=partners, user_name=user.name)
 
 
 @app.route('/stats/messages/count/')
 @require_login()
 def message_count(user):
-  msg_cnt_lst = memcache.get("msg_cnt_lst" + user.fb_id)
-
-  if not msg_cnt_lst:
-    msg_cnt = defaultdict(int)
-    for msg in Message.all():
-      msg_cnt[msg.conversation_partner] += 1
-
-    msg_cnt_lst = sorted(msg_cnt.iteritems(),
-                         key=operator.itemgetter(1), reverse=True)
-    memcache.set(key="msg_cnt_lst" + user.fb_id, value=msg_cnt_lst)
+  msg_cnt = get_msg_cnt(user)
+  msg_cnt_lst = sorted(msg_cnt.iteritems(),
+                       key=operator.itemgetter(1), reverse=True)
 
   return render('message_count.html', partners=msg_cnt_lst,
                 user_name=user.name)
@@ -143,27 +135,12 @@ def message_count(user):
 @app.route('/stats/messages/length/')
 @require_login()
 def message_length(user):
-  msg_avg_len = memcache.get("msg_avg_len" + user.fb_id)
-  msg_cnt = memcache.get("msg_cnt" + user.fb_id)
+  msg_cnt = get_msg_cnt(user)
+  msg_avg_len = get_msg_avg_len(user)
+  msg_avg_len_lst = sorted(msg_avg_len.iteritems(),
+                           key=operator.itemgetter(1), reverse=True)
 
-  if not msg_avg_len or not msg_cnt:
-    msg_len = defaultdict(int)
-    msg_cnt = defaultdict(int)
-    for msg in Message.all():
-      msg_len[msg.conversation_partner] += len(msg.content)
-      msg_cnt[msg.conversation_partner] += 1
-
-    msg_avg_len = {}
-    for name, count in msg_cnt.iteritems():
-      if count >= 10:
-        msg_avg_len[name] = msg_len[name] / count
-
-    msg_avg_len = sorted(msg_avg_len.iteritems(),
-                         key=operator.itemgetter(1), reverse=True)
-    memcache.set(key="msg_avg_len" + user.fb_id, value=msg_avg_len)
-    memcache.set(key="msg_cnt" + user.fb_id, value=msg_cnt)
-
-  return render('message_length.html', msg_avg_len=msg_avg_len,
+  return render('message_length.html', msg_avg_len=msg_avg_len_lst,
                 msg_cnt=msg_cnt, user_name=user.name)
 
 
@@ -218,6 +195,54 @@ def show_words_for(user, fb_id):
   return render('show.html', entries=word_list, user_name=user.name)
 
 
+@app.route('/graph/messages/monthly/')
+@require_login()
+def messages_per_month(user):
+  words_per_month = memcache.get("words_per_month" + user.fb_id)
+
+  if not words_per_month:
+    oldest = Message.all().order("creation_time").get().creation_time
+    now = datetime.datetime.now()
+
+    words_per_month = defaultdict(lambda: defaultdict(int))
+    start_date = datetime.datetime(oldest.year, oldest.month, 1)
+    end_date = datetime.datetime(oldest.year + (oldest.month / 12),
+                                 (oldest.month % 12) + 1, 1)
+
+    while start_date < now:
+      q = (Message.all().filter("creation_time >", start_date)
+                        .filter("creation_time <", end_date))
+      month = start_date.strftime("%Y.%m")
+      logging.info(month)
+      for m in q:
+        words_per_month[month][m.conversation_partner] += len(m.content.split(" "))
+
+      start_date = datetime.datetime(start_date.year + (start_date.month / 12), (start_date.month) % 12 + 1, 1)
+      end_date = datetime.datetime(end_date.year + (end_date.month / 12), (end_date.month % 12) + 1, 1)
+
+    words_per_month_toplist = defaultdict(lambda: defaultdict(int))
+
+    for month, partner_list in words_per_month.iteritems():
+      top_contacts = sorted(partner_list.iteritems(), key=operator.itemgetter(1))[:5]
+      for contact, num_counts in top_contacts:
+        words_per_month_toplist[contact][month] = num_counts
+
+    for contact in words_per_month_toplist.iterkeys():
+      for month in words_per_month.iterkeys():
+        if not month in words_per_month_toplist[contact]:
+          words_per_month_toplist[contact][month] = 0
+
+    for contact in words_per_month_toplist.iterkeys():
+      words_per_month_toplist[contact] = sorted(words_per_month_toplist[contact].iteritems(),
+                                                key=operator.itemgetter(0))
+
+    words_per_month = sorted(words_per_month_toplist.iteritems(),
+                             key=operator.itemgetter(0), reverse=True)
+    memcache.set("words_per_month" + user.fb_id, words_per_month)
+
+  return render('graph_words.html', words=words_per_month, user_name=user.name)
+
+
 @app.route('/logout/')
 @require_login()
 def logout(user):
@@ -226,9 +251,16 @@ def logout(user):
   return redirect(url_for('index'))
 
 
+@app.route('/session/clear/')
+def session_clear():
+  session.pop('user_key', None)
+  return redirect(url_for('index'))
+
+
 if __name__ == '__main__':
   port = 3434
+  app.wsgi_app = get_debugged_app(app)
   if app.config.get('FB_APP_ID') and app.config.get('FB_APP_SECRET'):
-    app.run(host='0.0.0.0', port=port)
+    app.run(host='0.0.0.0', port=port, debug=True)
   else:
     print 'Cannot start application without Facebook App Id and Secret set'
