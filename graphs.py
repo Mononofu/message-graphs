@@ -53,6 +53,33 @@ def words_per_month_user(user):
   return render('graph_words_per_user.html', words=words_per_month, user_name=user.name)
 
 
+@app.route('/graph/words/monthly/gender/')
+@require_login()
+def words_per_month_gender(user):
+  words_per_month = get_words_per_month(user)
+  words_per_month_genderlist = defaultdict(lambda: defaultdict(int))
+
+  for month, partners in words_per_month.iteritems():
+    epoch = time.mktime(dt.strptime(month, "%Y.%m").timetuple())
+    for contact, num_words in partners.iteritems():
+      words_per_month_genderlist[get_gender(user, contact)][epoch] += num_words
+
+  for contact in words_per_month_genderlist.iterkeys():
+    for month in words_per_month.iterkeys():
+      epoch = time.mktime(dt.strptime(month, "%Y.%m").timetuple())
+      if not epoch in words_per_month_genderlist[contact]:
+        words_per_month_genderlist[contact][epoch] = 0
+
+  for contact in words_per_month_genderlist.iterkeys():
+    words_per_month_genderlist[contact] = sorted(
+      words_per_month_genderlist[contact].iteritems(),
+      key=operator.itemgetter(0))
+
+  logging.info(words_per_month_genderlist)
+  return render('graph_words_per_gender.html', words=words_per_month_genderlist, user_name=user.name)
+
+
+
 @app.route('/graph/words/punchcard/')
 @require_login()
 def words_punchcard(user):

@@ -12,5 +12,21 @@ indexes:
 
 - kind: Message
   properties:
+  - name: conversation_partner
+  - name: conversation_partner_id
+
+- kind: Message
+  properties:
   - name: owner
   - name: conversation_partner
+
+- kind: Message
+  properties:
+  - name: owner_id
+  - name: conversation_partner
+
+- kind: Message
+  properties:
+  - name: owner_id
+  - name: conversation_partner
+  - name: conversation_partner_id

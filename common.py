@@ -40,7 +40,10 @@ def require_login():
       if not 'user_key' in session:
         logging.info("Starting login")
         rand_state = str(random.randint(100, 10000000))
-        oauth_url_code = "https://www.facebook.com/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=read_mailbox" % (Config.FBAPI_APP_ID, "http://localhost:8888/fb_login", rand_state)
+        oauth_url_code = "https://www.facebook.com/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s" % (
+          Config.FBAPI_APP_ID, "http://localhost:8888/fb_login",
+          rand_state,
+          ",".join(app.config['FBAPI_SCOPE']))
         session["state"] = rand_state
         return redirect(oauth_url_code)
 

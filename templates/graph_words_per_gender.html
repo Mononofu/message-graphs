@@ -1,0 +1,61 @@
+{% extends "index.html" %}
+
+{% block content %}
+
+<div id='chart'>
+  <svg style='height:500px'> </svg>
+</div>
+
+<script>
+
+ nv.addGraph(function() {
+  var chart = nv.models.stackedAreaChart()
+                  .clipEdge(true);
+
+  chart.xAxis
+        .axisLabel('Month')
+        .tickFormat(function(d) {
+          return d3.time.format('%B %Y')(new Date(d * 1000));
+        });
+
+  chart.yAxis
+        .axisLabel('# Word')
+        .tickFormat(d3.format('.0f'));
+
+
+
+  d3.select('#chart svg')
+        .datum(words_per_month())
+        .transition().duration(500)
+        .call(chart);
+
+
+  nv.utils.windowResize(function() { d3.select('#chart svg').call(chart) });
+
+  return chart;
+ });
+
+function words_per_month() {
+  return [
+  {% for gender, counts in words.iteritems() %}
+    {
+       key: '{{ gender }}',
+       color: {% if gender == "female" %} '#FF83FF',
+       {% elif gender == "male" %} '#0074FF',
+       {% else %} '#858585',
+       {% endif %}
+       values: [
+        {% for month, count in counts %}
+          { x: {{ month }}, y: {{ count }} },
+        {% endfor %}
+       ]
+    },
+  {% endfor %}
+  ];
+}
+
+
+</script>
+
+{% endblock%}
+

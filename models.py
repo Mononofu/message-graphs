@@ -7,8 +7,14 @@ class User(db.Model):
   access_token = db.StringProperty()
 
 
+class Contact(db.Model):
+  name = db.StringProperty()
+  fb_id = db.StringProperty()
+  gender = db.StringProperty()
+
+
 class Message(db.Model):
-  owner = db.ReferenceProperty(reference_class=User)
+  owner_id = db.StringProperty()
   conversation_partner = db.StringProperty()
   conversation_partner_id = db.StringProperty()
   author = db.StringProperty()

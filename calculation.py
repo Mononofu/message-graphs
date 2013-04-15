@@ -3,20 +3,27 @@ from google.appengine.ext import db
 
 from collections import defaultdict
 import re
+import logging
 
 from models import *
+from fb_auth import fb_call
 
 
 # list of all chat partners
 def chat_partners(user):
   partners = memcache.get("partners" + user.fb_id)
+  partner_ids = memcache.get("partner_ids" + user.fb_id)
 
-  if not partners:
+  if not partners or not partner_ids:
     partners = []
-    for proj in db.Query(Message, projection=['conversation_partner'],
-                         distinct=True).filter("owner =", user):
+    partner_ids = {}
+    for proj in db.Query(Message, projection=['conversation_partner', 'conversation_partner_id'],
+                         distinct=True).filter("owner_id =", user.fb_id):
       partners.append(proj.conversation_partner)
+      partner_ids[proj.conversation_partner] = proj.conversation_partner_id
+
     memcache.set(key="partners" + user.fb_id, value=partners)
+    memcache.set(key="partner_ids" + user.fb_id, value=partner_ids)
 
   return partners
 
@@ -158,3 +165,31 @@ def get_word_avg_len(user):
 def get_word_cnt(user):
   calc_word_stats(user)
   return memcache.get("word_cnt" + user.fb_id)
+
+
+# return male/female for a name
+def get_gender(user, name):
+  gender = memcache.get("partner_%s_gender_%s" % (name, user.fb_id))
+
+  if not gender:
+    chat_partners(user)
+    partner_ids = memcache.get("partner_ids" + user.fb_id)
+    fb_id = partner_ids[name]
+
+    contact = Contact.all().filter("fb_id =", fb_id).get()
+    if not contact:
+      gender = "unknown"
+
+      if fb_id != "-1":
+        c = fb_call(fb_id, args={'access_token': user.access_token,
+                                 'fields': 'name,gender'})
+        if "gender" in c:
+          gender = c["gender"]
+
+      contact = Contact(name=name, fb_id=fb_id, gender=gender)
+      contact.put()
+    gender = contact.gender
+
+    memcache.set("partner_%s_gender_%s" % (name, user.fb_id), gender)
+
+  return gender
