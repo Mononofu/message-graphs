@@ -1,0 +1,56 @@
+{% extends "index.html" %}
+
+{% block content %}
+
+<div id='chart'>
+  <svg style='height:600px'> </svg>
+</div>
+
+<script>
+
+ nv.addGraph(function() {
+  var chart = nv.models.lineWithFocusChart();
+
+  chart.xAxis
+        .axisLabel('Month')
+        .tickFormat(function(d) {
+          return d3.time.format('%B %Y')(new Date(d * 1000));
+        });
+
+  chart.x2Axis
+        .tickFormat(function(d) {
+          return d3.time.format('%B %Y')(new Date(d * 1000));
+        });
+
+  chart.yAxis
+        .axisLabel('# Persons')
+       .tickFormat(d3.format('.0f'));
+
+  d3.select('#chart svg')
+       .datum(words_per_month())
+     .transition().duration(500)
+       .call(chart);
+
+  nv.utils.windowResize(function() { d3.select('#chart svg').call(chart) });
+
+  return chart;
+ });
+
+function words_per_month() {
+  return [
+  {
+       values: [
+        {% for person, count in persons %}
+          {x: {{person}}, y: {{ count }} },
+        {% endfor %}
+       ],
+       key: '# Persons'
+     }
+  ];
+}
+
+
+</script>
+
+{% endblock%}
+
