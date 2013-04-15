@@ -15,7 +15,11 @@ class MessageFetcher(object):
     self.deleted_counter = 0
 
   def run(self):
-    self.newest_msg = Message.all().order("-creation_time").get().creation_time
+    newest = Message.all().order("-creation_time").get()
+    if newest:
+      self.newest_msg = newest.creation_time
+    else:
+      self.newest_msg = dt(1970, 1, 1)
 
     request_url = ("https://graph.facebook.com/me/inbox" +
                    "?format=json&access_token=%s&limit=200" % self.user.access_token)
