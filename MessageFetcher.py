@@ -1,11 +1,10 @@
 import time
-import logging
 import json
 import datetime
 dt = datetime.datetime
-from celery.contrib.methods import task_method
+import threading
 
-from common import pool, celery
+from common import pool, app
 from models import *
 
 
@@ -15,6 +14,10 @@ class MessageFetcher(object):
     self.deleted_counter = 0
 
   def run(self):
+    thread = threading.Thread(target=self.execute)
+    thread.start()
+
+  def execute(self):
     newest = Message.all().order("-creation_time").get()
     if newest:
       self.newest_msg = newest.creation_time
@@ -23,15 +26,18 @@ class MessageFetcher(object):
 
     request_url = ("https://graph.facebook.com/me/inbox" +
                    "?format=json&access_token=%s&limit=200" % self.user.access_token)
-    deferred.defer(self._continue, request_url)
+    self._continue(request_url)
+    app.logger.debug("DONE!")
 
-  @celery.task(filter=task_method)
   def _continue(self, next_url):
-    logging.info(next_url)
+    app.logger.debug(next_url)
     time.sleep(2)
     r = pool.request('GET', next_url)
-
     j = json.loads(r.data)
+
+    if "error" in j:
+      print j["error"]
+      return
 
     for conversation in j["data"]:
       if "comments" not in conversation:
@@ -57,21 +63,21 @@ class MessageFetcher(object):
 
       if new_msgs_left and "paging" in comments:
         next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-        deferred.defer(self._parse_thread, contact, contact_id, next_page)
+        self._parse_thread(contact, contact_id, next_page)
 
     if "paging" in j:
       request_url = j["paging"]["next"].replace("limit=25", "limit=200")
-      deferred.defer(self._continue, request_url)
+      self._continue(request_url)
 
   def _parse_thread(self, partner, partner_id, next_page):
-    logging.info(next_page)
+    app.logger.debug(next_page)
     time.sleep(2)
     comments = json.loads(pool.request('GET', next_page).data)
     new_msgs_left = self._parse_messages(partner, partner_id, comments["data"])
 
     if new_msgs_left and "paging" in comments:
       next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-      deferred.defer(self._parse_thread, partner, partner_id, next_page)
+      self._parse_thread(partner, partner_id, next_page)
 
   def _parse_messages(self, partner, partner_id, messages):
     new_msgs_left = True
@@ -90,7 +96,7 @@ class MessageFetcher(object):
 
       author = partner
       author_id = partner_id
-      if message["from"]:
+      if "from" in message:
         author = message["from"]["name"]
         author_id = message["from"]["id"]
 

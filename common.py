@@ -4,7 +4,6 @@ import inspect
 from functools import wraps
 from flask import Flask, session, redirect, url_for, render_template, request
 import random
-from celery import Celery
 
 from models import User
 
@@ -19,24 +18,11 @@ class MyPoolManager(urllib3.PoolManager):
     logging.info("Reply: %s" % r.data)
     return r
 
-def make_celery(app):
-    celery = Celery(app.import_name, broker=app.config['CELERY_BROKER_URL'])
-    celery.conf.update(app.config)
-    TaskBase = celery.Task
-    class ContextTask(TaskBase):
-        abstract = True
-        def __call__(self, *args, **kwargs):
-            with app.app_context():
-                return TaskBase.__call__(self, *args, **kwargs)
-    celery.Task = ContextTask
-    return celery
-
 pool = MyPoolManager()
 
 app = Flask(__name__)
 app.config.from_pyfile('conf.py')
 app.debug = True
-celery = make_celery(app)
 
 def render(template, **kwargs):
   return render_template(template, active_page=request.path, **kwargs)

@@ -14,9 +14,9 @@ class Contact(db.Model):
 
 class Message(db.Model):
   owner_id = db.StringProperty()
-  conversation_partner = db.StringProperty()
+  conversation_partner = db.StringProperty(key_level=1)
   conversation_partner_id = db.StringProperty()
   author = db.StringProperty()
   author_id = db.StringProperty()
   content = db.TextProperty()
-  creation_time = db.DateTimeProperty()
+  creation_time = db.DateTimeProperty(key_level=3)

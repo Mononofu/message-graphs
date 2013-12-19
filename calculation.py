@@ -15,6 +15,7 @@ class Memcache(object):
   def set(self, key, value):
     self.cache[key] = value
 
+memcache = Memcache()
 
 # list of all chat partners
 def chat_partners(user):

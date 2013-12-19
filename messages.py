@@ -102,7 +102,7 @@ def show_words_for(user, fb_id):
 @require_login()
 def logout(user):
   session.pop('user_key', None)
-  db.delete(user)
+  User.delete(user)
   return redirect(url_for('index'))
 
 
