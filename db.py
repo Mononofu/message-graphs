@@ -58,11 +58,12 @@ class Query(object):
 
 
 class Property(object):
-  def __init__(self, default=None, key_level=None):
+  def __init__(self, default=None, key_level=None, filename_pos=None):
     self.default = default
     self.key_level = key_level
+    self.filename_pos = filename_pos
 
-  def serialize(self, data):
+  def serialize(self, data, pretty=False):
     return unicode(data)
 
   def deserialize(self, string):
@@ -76,9 +77,13 @@ class TextProperty(Property):
 
 class DateTimeProperty(Property):
   _date_format = "%Y-%m-%d_%H:%M:%S.%f"
+  _date_format_pretty = "%Y-%m-%d_%H:%M:%S"
 
-  def serialize(self, data):
-    return data.strftime(self._date_format)
+  def serialize(self, data, pretty=False):
+    if pretty:
+      return data.strftime(self._date_format_pretty)
+    else:
+      return data.strftime(self._date_format)
 
   def deserialize(self, string):
     return datetime.datetime.strptime(string, self._date_format)
@@ -95,6 +100,10 @@ class Model(object):
       setattr(self, name, type.default)
     self.keys = [(n, v) for n, v in self.properties.iteritems() if v.key_level]
     self.keys = sorted(self.keys, key=lambda (n, v): v.key_level)
+    self.filename_parts = [(n, v) for n, v in self.properties.iteritems()
+                           if v.filename_pos]
+    self.filename_parts = sorted(self.filename_parts,
+                                 key=lambda (n, v): v.filename_pos)
     for name, value in kwargs.iteritems():
       if name not in self.properties:
         raise RuntimeError("%s is not a property of %s" % (name, self.__class__.__name__))
@@ -173,8 +182,8 @@ class Model(object):
       os.remove(self._path())
 
   def __str__(self):
-    return "%s(%s)" % (self.__class__.__name__,
-      ', '.join(['%s=%s' % (n, getattr(self, n)) for n in self.properties]))
+    return u"%s(%s)" % (self.__class__.__name__,
+      u', '.join([u'%s=%s' % (n, getattr(self, n)) for n in self.properties]))
 
   @classmethod
   def _generate_instances(cls):
@@ -182,7 +191,7 @@ class Model(object):
     path = os.path.join(DB_PREFIX, name)
     for (dirpath, dirnames, filenames) in os.walk(path):
       for filename in filenames:
-        if filename == "_index":
+        if filename == u"_index":
           continue
 
         filepath = os.path.join(dirpath, filename)
@@ -192,12 +201,14 @@ class Model(object):
   @classmethod
   def _index_path(cls):
     path = os.path.join(DB_PREFIX, cls.__name__)
-    return os.path.join(path, '_index')
+    return os.path.join(path, u'_index')
 
   def _path(self):
     path = os.path.join(DB_PREFIX, self.__class__.__name__)
     for name, type in self.keys:
-      path = os.path.join(path, type.serialize(getattr(self, name)))
-    path += "_%s" % self.key()
+      path = os.path.join(path, type.serialize(getattr(self, name), pretty=True))
+    filename = u"_".join([type.serialize(getattr(self, name), pretty=True)
+                         for name, type in self.filename_parts])
+    path = os.path.join(path, u"%s_%s.json" % (filename, self.key()))
     return path
 
