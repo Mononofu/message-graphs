@@ -1,10 +1,13 @@
+# -*- coding: utf-8 -*-
 import db
 import models
 import unittest
+import datetime
 
 class TestDbModel(unittest.TestCase):
   def setUp(self):
     models.User.clear()
+    models.Message.clear()
 
   def test_objectCreation(self):
     user = models.User(name="test")
@@ -24,7 +27,6 @@ class TestDbModel(unittest.TestCase):
   def test_objectPutAndGet(self):
     user = models.User(name="test")
     key = user.key()
-    print key
     user.put()
     restored_user = models.User.get(key)
     self.assertEqual(restored_user.name, user.name)
@@ -43,6 +45,28 @@ class TestDbModel(unittest.TestCase):
     last_user = models.User.all().order('-name').get()
     self.assertEqual(first_user.name, "alf")
     self.assertEqual(last_user.name, "snow")
+
+  def test_objectPutAndQueryWithDate(self):
+    msg = models.Message(author="Julian", creation_time=datetime.datetime.now())
+    msg.put()
+    restored_msg = models.Message.all().filter("author =", "Julian").get()
+    self.assertEqual(restored_msg.author, msg.author)
+    self.assertEqual(restored_msg.creation_time, msg.creation_time)
+
+  def test_objectPutAndGetUnicode(self):
+    user = models.User(name=u"test日本")
+    key = user.key()
+    user.put()
+    restored_user = models.User.get(key)
+    self.assertEqual(restored_user.name, user.name)
+
+  def test_objectPutAndGetIdenticalKeys(self):
+    user1 = models.User(name="test", fb_id="1")
+    user1.put()
+    user2 = models.User(name="test", fb_id="2")
+    user2.put()
+    self.assertEqual(models.User.get(user1.key()).fb_id, user1.fb_id)
+    self.assertEqual(models.User.get(user2.key()).fb_id, user2.fb_id)
 
 if __name__ == '__main__':
   unittest.main()

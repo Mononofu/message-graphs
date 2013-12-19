@@ -1,6 +1,7 @@
 import inspect
 import json
 import shutil
+import datetime
 import os
 
 DB_PREFIX = "db"
@@ -52,11 +53,20 @@ class Query(object):
     for instance in self.instances:
       yield instance
 
+  def __call__(self):
+    return self.run()
+
 
 class Property(object):
   def __init__(self, default=None, key_level=None):
     self.default = default
     self.key_level = key_level
+
+  def serialize(self, data):
+    return unicode(data)
+
+  def deserialize(self, string):
+    return string
 
 class StringProperty(Property):
   pass
@@ -65,10 +75,18 @@ class TextProperty(Property):
   pass
 
 class DateTimeProperty(Property):
-  pass
+  _date_format = "%Y-%m-%d_%H:%M:%S.%f"
+
+  def serialize(self, data):
+    return data.strftime(self._date_format)
+
+  def deserialize(self, string):
+    return datetime.datetime.strptime(string, self._date_format)
 
 class Model(object):
   key_counter = 0
+
+  _key = StringProperty()
 
   def __init__(self, *args, **kwargs):
     self.properties = dict([(n, v) for n, v in inspect.getmembers(self)
@@ -78,14 +96,13 @@ class Model(object):
     self.keys = [(n, v) for n, v in self.properties.iteritems() if v.key_level]
     self.keys = sorted(self.keys, key=lambda (n, v): v.key_level)
     for name, value in kwargs.iteritems():
-      if name not in self.properties and name != "_key":
+      if name not in self.properties:
         raise RuntimeError("%s is not a property of %s" % (name, self.__class__.__name__))
       setattr(self, name, value)
 
     if '_key' not in kwargs:
       self._key = Model.key_counter
       Model.key_counter += 1
-      self.properties["_key"] = StringProperty()
 
   @classmethod
   def clear(cls):
@@ -93,16 +110,16 @@ class Model(object):
 
   @classmethod
   def from_string(cls, string):
-    data = json.loads(string)
+    raw_data = json.loads(string)
+    data = {}
+    for name, value in raw_data.iteritems():
+      type = getattr(cls, name)
+      data[name] = type.deserialize(value)
     return cls(**data)
 
   @classmethod
-  def get(cls, key):
-    name = cls.__name__
-    path = os.path.join(DB_PREFIX, name)
-
-    index_path = os.path.join(path, '_index')
-
+  def get(cls, target_key):
+    index_path = cls._index_path()
     if not os.path.exists(index_path):
       return None
 
@@ -112,44 +129,48 @@ class Model(object):
     with open(index_path) as f:
       for line in f.read().strip().split('\n'):
         key, path = line.split(":")
-        files[key] = path
+        files[int(key)] = path
     with open(index_path, 'w') as f:
       for key, path in files.iteritems():
         f.write("%s:%s\n" % (key, path))
 
-    if key not in files:
+    if target_key not in files:
       return None
 
-    with open(files[key]) as f:
+    with open(files[target_key]) as f:
       return cls.from_string(f.read())
 
   @classmethod
   def all(cls):
     return Query(cls._generate_instances())
 
+  @classmethod
+  def delete(cls, key):
+    instance = cls.get(key)
+    if instance:
+      instance.delete()
+
   def key(self):
     return self._key
 
   def put(self):
-    name = self.__class__.__name__
-    path = os.path.join(DB_PREFIX, name)
-
-    index_path = os.path.join(path, '_index')
-    for name, type in self.keys:
-      path = os.path.join(path, getattr(self, name))
-
+    path = self._path()
     d = os.path.dirname(path)
     if not os.path.exists(d):
       os.makedirs(d)
 
-    with open(index_path, 'a+') as f:
-      f.write('%s:%s\n' % (self.key(), path))
+    with open(self._index_path(), 'a+') as f:
+      f.write(u'{0}:{1}\n'.format(self.key(), path).encode("utf-8"))
 
     with open(path, 'w') as f:
       data = {}
-      for name in self.properties:
-        data[name] = getattr(self, name)
-      f.write(json.dumps(data))
+      for name, type in self.properties.iteritems():
+        data[name] = type.serialize(getattr(self, name))
+      f.write(json.dumps(data).encode("utf-8"))
+
+  def delete(self):
+    if os.path.exists(self._path()):
+      os.remove(self._path())
 
   def __str__(self):
     return "%s(%s)" % (self.__class__.__name__,
@@ -167,3 +188,16 @@ class Model(object):
         filepath = os.path.join(dirpath, filename)
         with open(filepath) as f:
           yield cls.from_string(f.read())
+
+  @classmethod
+  def _index_path(cls):
+    path = os.path.join(DB_PREFIX, cls.__name__)
+    return os.path.join(path, '_index')
+
+  def _path(self):
+    path = os.path.join(DB_PREFIX, self.__class__.__name__)
+    for name, type in self.keys:
+      path = os.path.join(path, type.serialize(getattr(self, name)))
+    path += "_%s" % self.key()
+    return path
+
