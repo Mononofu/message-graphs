@@ -1,7 +1,7 @@
 import db
 
 class User(db.Model):
-  name = db.StringProperty()
+  name = db.StringProperty(key_level=1)
   fb_id = db.StringProperty()
   access_token = db.StringProperty()
 
