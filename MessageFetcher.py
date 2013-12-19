@@ -3,9 +3,9 @@ import logging
 import json
 import datetime
 dt = datetime.datetime
-from google.appengine.ext import deferred
+from celery.contrib.methods import task_method
 
-from common import pool
+from common import pool, celery
 from models import *
 
 
@@ -25,6 +25,7 @@ class MessageFetcher(object):
                    "?format=json&access_token=%s&limit=200" % self.user.access_token)
     deferred.defer(self._continue, request_url)
 
+  @celery.task(filter=task_method)
   def _continue(self, next_url):
     logging.info(next_url)
     time.sleep(2)

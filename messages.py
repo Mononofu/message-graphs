@@ -4,22 +4,17 @@ import urlparse
 import re
 
 from flask import request, redirect, url_for, flash, session, abort
-from werkzeug_debugger_appengine import get_debugged_app
 
 from common import pool, app, require_login, render
 from fb_auth import fb_call
-from conf import Config
 from MessageFetcher import *
 from models import *
 from calculation import *
 import graphs
 import stats
 
-from google.appengine.api import memcache
-
-FB_APP_ID = Config.FBAPI_APP_ID
-FB_APP_SECRET = Config.FBAPI_APP_SECRET
-
+FB_APP_ID = app.config.get('FBAPI_APP_ID')
+FB_APP_SECRET = app.config.get('FBAPI_APP_SECRET')
 
 @app.route('/fb_login/')
 def fb_login():
@@ -118,9 +113,8 @@ def session_clear():
 
 
 if __name__ == '__main__':
-  port = 3434
-  app.wsgi_app = get_debugged_app(app)
-  if app.config.get('FB_APP_ID') and app.config.get('FB_APP_SECRET'):
-    app.run(host='0.0.0.0', port=port, debug=True)
+  if app.config.get('FBAPI_APP_ID') and app.config.get('FBAPI_APP_SECRET'):
+    app.run(host='0.0.0.0', port=app.config.get('PORT'), debug=True)
   else:
     print 'Cannot start application without Facebook App Id and Secret set'
+    print app.config

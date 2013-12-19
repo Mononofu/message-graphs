@@ -7,10 +7,9 @@ import json
 
 from flask import Flask, request, redirect, render_template, url_for
 from common import pool, app
-from conf import Config
 
-FB_APP_ID = Config.FBAPI_APP_ID
-FB_APP_SECRET = Config.FBAPI_APP_SECRET
+FB_APP_ID = app.config.get('FBAPI_APP_ID')
+FB_APP_SECRET = app.config.get('FBAPI_APP_SECRET')
 
 
 def oauth_login_url(preserve_path=True, next_url=None):
