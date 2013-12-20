@@ -32,7 +32,7 @@ def require_login():
     @wraps(f)
     def wrapped(*args, **kwargs):
       if not 'user_key' in session:
-        logging.info("Starting login")
+        app.logger.debug("Starting login")
         rand_state = str(random.randint(100, 10000000))
         oauth_url_code = "https://www.facebook.com/dialog/oauth?client_id=%s&redirect_uri=%s&state=%s&scope=%s" % (
           app.config.get('FBAPI_APP_ID'), "http://localhost:%d/fb_login" % app.config.get('PORT'),
@@ -43,6 +43,7 @@ def require_login():
 
       user = User.get(session['user_key'])
       if not user:
+        app.logger.debug("Invalid User: %s for %s" % (user, session['user_key']))
         session.pop('user_key', None)
         return redirect(url_for('index'))
 

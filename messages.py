@@ -1,5 +1,4 @@
 # -*- coding: utf-8 -*-
-import logging
 import urlparse
 import re
 
@@ -18,21 +17,21 @@ FB_APP_SECRET = app.config.get('FBAPI_APP_SECRET')
 
 @app.route('/fb_login/')
 def fb_login():
-  logging.info("callback from facebook")
+  app.logger.debug("callback from facebook")
   state = request.args.get('state')
   if not state:
-    logging.error("state not present, possibly auth declined")
+    app.logger.error("state not present, possibly auth declined")
     abort(401)
 
   if session['state'] != state:
-    logging.error("%s != %s, possible XSRF" % (session['state'], state))
+    app.logger.error("%s != %s, possible XSRF" % (session['state'], state))
     abort(401)
 
   code = request.args.get('code')
   oauth_url_access = "https://graph.facebook.com/oauth/access_token?client_id=%s&redirect_uri=%s&client_secret=%s&code=%s" % (FB_APP_ID, "http://localhost:8888/fb_login", FB_APP_SECRET, code)
 
   reply = urlparse.parse_qs(pool.request('GET', oauth_url_access).data)
-  logging.info(reply)
+  app.logger.debug(reply)
   token = reply["access_token"][0]
 
   me = fb_call('me', args={'access_token': token,
@@ -49,13 +48,14 @@ def fb_login():
     u = User(name=me['name'], fb_id=me['id'], access_token=token)
     u.put()
   session['user_key'] = str(u.key())
+  app.logger.debug("Saving session key: %s" % session['user_key'])
   return redirect(url_for('index'))
 
 
 @app.route('/')
 @require_login()
 def index(user):
-  logging.info(request.path)
+  app.logger.debug(request.path)
   #me = fb_call('me', args={'access_token': user.access_token})
 
   return render('index.html', user_name=user.name)

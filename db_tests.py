@@ -68,5 +68,10 @@ class TestDbModel(unittest.TestCase):
     self.assertEqual(models.User.get(user1.key()).fb_id, user1.fb_id)
     self.assertEqual(models.User.get(user2.key()).fb_id, user2.fb_id)
 
+  def test_objectPutAndGetWithSpaces(self):
+    user = models.User(name="Julian Schrittwieser", fb_id="1")
+    user.put()
+    self.assertEqual(models.User.get(user.key()).name, user.name)
+
 if __name__ == '__main__':
   unittest.main()

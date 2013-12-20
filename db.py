@@ -89,7 +89,7 @@ class DateTimeProperty(Property):
     return datetime.datetime.strptime(string, self._date_format)
 
 class Model(object):
-  key_counter = 0
+  key_counter = 1
 
   _key = StringProperty()
 
@@ -143,10 +143,10 @@ class Model(object):
       for key, path in files.iteritems():
         f.write("%s:%s\n" % (key, path))
 
-    if target_key not in files:
+    if int(target_key) not in files:
       return None
 
-    with open(files[target_key]) as f:
+    with open(files[int(target_key)]) as f:
       return cls.from_string(f.read())
 
   @classmethod
@@ -182,8 +182,8 @@ class Model(object):
       os.remove(self._path())
 
   def __str__(self):
-    return u"%s(%s)" % (self.__class__.__name__,
-      u', '.join([u'%s=%s' % (n, getattr(self, n)) for n in self.properties]))
+    return "%s(%s)" % (self.__class__.__name__,
+      ', '.join(['%s=%s' % (n, getattr(self, n)) for n in self.properties]))
 
   @classmethod
   def _generate_instances(cls):
@@ -191,7 +191,7 @@ class Model(object):
     path = os.path.join(DB_PREFIX, name)
     for (dirpath, dirnames, filenames) in os.walk(path):
       for filename in filenames:
-        if filename == u"_index":
+        if filename == "_index":
           continue
 
         filepath = os.path.join(dirpath, filename)
@@ -201,14 +201,14 @@ class Model(object):
   @classmethod
   def _index_path(cls):
     path = os.path.join(DB_PREFIX, cls.__name__)
-    return os.path.join(path, u'_index')
+    return os.path.join(path, '_index')
 
   def _path(self):
     path = os.path.join(DB_PREFIX, self.__class__.__name__)
     for name, type in self.keys:
       path = os.path.join(path, type.serialize(getattr(self, name), pretty=True))
-    filename = u"_".join([type.serialize(getattr(self, name), pretty=True)
+    filename = "_".join([type.serialize(getattr(self, name), pretty=True)
                          for name, type in self.filename_parts])
-    path = os.path.join(path, u"%s_%s.json" % (filename, self.key()))
+    path = os.path.join(path, "%s_%s.json" % (filename, self.key()))
     return path
 
