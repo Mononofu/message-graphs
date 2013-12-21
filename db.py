@@ -68,7 +68,8 @@ class Query(object):
       yield instance
 
   def __call__(self):
-    return self.run()
+    for instance in self.instances:
+      yield instance
 
   def __iter__(self):
     for instance in self.instances:

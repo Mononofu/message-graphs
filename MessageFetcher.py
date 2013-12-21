@@ -138,7 +138,6 @@ class MessageFetcher(object):
         author_id = message["from"]["id"]
 
       msg = Message(
-          owner_id=self.user.fb_id,
           conversation_partner=partner,
           conversation_partner_id=partner_id,
           author=author,

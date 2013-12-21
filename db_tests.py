@@ -91,13 +91,21 @@ class TestDbModel(unittest.TestCase):
     self.assertEqual(projected_user.name, "test")
     self.assertEqual(projected_user.fb_id, None)
 
-
   def test_queryDistinctProjection(self):
     models.User(name="test", fb_id="1").put()
     models.User(name="test", fb_id="1").put()
     models.User(name="test", fb_id="2").put()
     projection = db.Query(models.User, distinct=True, projection=["name", "fb_id"])
     self.assertEqual(len(projection), 2)
+
+  def test_queryDistinctProjectionIteration(self):
+    models.User(name="test", fb_id="1").put()
+    models.User(name="test", fb_id="1").put()
+    models.User(name="test", fb_id="2").put()
+    i = 0
+    for p in db.Query(models.User, distinct=True, projection=["name", "fb_id"]):
+      i += 1
+    self.assertEqual(i, 2)
 
 if __name__ == '__main__':
   unittest.main()

@@ -26,7 +26,7 @@ def chat_partners(user):
     partners = []
     partner_ids = {}
     for proj in db.Query(Message, projection=['conversation_partner', 'conversation_partner_id'],
-                         distinct=True).filter("owner_id =", user.fb_id):
+                         distinct=True):
       partners.append(proj.conversation_partner)
       partner_ids[proj.conversation_partner] = proj.conversation_partner_id
 
