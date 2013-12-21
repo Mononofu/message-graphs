@@ -4,8 +4,14 @@ import models
 import unittest
 import datetime
 
+db.DB_PREFIX = "test-db"
+
 class TestDbModel(unittest.TestCase):
   def setUp(self):
+    models.User.clear()
+    models.Message.clear()
+
+  def tearDown(self):
     models.User.clear()
     models.Message.clear()
 
@@ -19,6 +25,12 @@ class TestDbModel(unittest.TestCase):
   def test_objectHasKey(self):
     user = models.User(name="test")
     self.assertIsNotNone(user.key())
+
+  def test_objectEquality(self):
+    user1 = models.User(name="test")
+    user2 = models.User(name="test")
+    user2._key = user1._key
+    self.assertEqual(user1, user2)
 
   def test_objectPut(self):
     user = models.User(name="test")
@@ -72,6 +84,20 @@ class TestDbModel(unittest.TestCase):
     user = models.User(name="Julian Schrittwieser", fb_id="1")
     user.put()
     self.assertEqual(models.User.get(user.key()).name, user.name)
+
+  def test_queryProjection(self):
+    models.User(name="test", fb_id="1").put()
+    projected_user = db.Query(models.User, distinct=True, projection=["name"]).get()
+    self.assertEqual(projected_user.name, "test")
+    self.assertEqual(projected_user.fb_id, None)
+
+
+  def test_queryDistinctProjection(self):
+    models.User(name="test", fb_id="1").put()
+    models.User(name="test", fb_id="1").put()
+    models.User(name="test", fb_id="2").put()
+    projection = db.Query(models.User, distinct=True, projection=["name", "fb_id"])
+    self.assertEqual(len(projection), 2)
 
 if __name__ == '__main__':
   unittest.main()

@@ -19,8 +19,22 @@ class Filter(object):
       raise RuntimeError("operator %s not implemented" % self.operator)
 
 class Query(object):
-  def __init__(self, instances):
-    self.instances = instances
+  def __init__(self, instances, distinct=False, projection=None):
+    if inspect.isclass(instances) and issubclass(instances, Model):
+      instances = instances.all().run()
+
+    if projection:
+      projected_instances = []
+      for instance in instances:
+        properties = dict([(p, getattr(instance, p)) for p in projection])
+        # projected instances don't exist in the db, so they can't have key
+        properties["_key"] = -1
+        projected_instances.append(instance.__class__(**properties))
+      instances = projected_instances
+    if distinct:
+      self.instances = set(instances)
+    else:
+      self.instances = instances
 
   def filter(self, property_operator, value):
     def _filter(instances):
@@ -55,6 +69,13 @@ class Query(object):
 
   def __call__(self):
     return self.run()
+
+  def __iter__(self):
+    for instance in self.instances:
+      yield instance
+
+  def __len__(self):
+    return len(self.instances)
 
 
 class Property(object):
@@ -112,6 +133,28 @@ class Model(object):
     if '_key' not in kwargs:
       self._key = Model.key_counter
       Model.key_counter += 1
+
+  def __eq__(self, other):
+    if isinstance(other, self.__class__):
+      if self._key != other._key:
+        return False
+      if self.properties != other.properties:
+        return False
+      for name in self.properties:
+        if getattr(self, name) != getattr(other, name):
+          return False
+      return True
+    else:
+      return False
+
+  def __ne__(self, other):
+    return not self.__eq__(other)
+
+  def __hash__(self):
+    hash = 0
+    for name in self.properties:
+      hash ^= getattr(self, name).__hash__()
+    return hash
 
   @classmethod
   def clear(cls):

@@ -3,21 +3,64 @@ import json
 import datetime
 dt = datetime.datetime
 import threading
+import traceback
 
 from common import pool, app
 from models import *
 
+class FacebookError(Exception):
+  def __init__(self, value):
+    self.value = value
+
+  def __str__(self):
+    return repr(self.value)
+
+class FacebookRateLimit(FacebookError):
+  pass
 
 class MessageFetcher(object):
   def __init__(self, user):
     self.user = user
     self.deleted_counter = 0
+    self.continuations = []
+    self.delay = 2
 
   def run(self):
-    thread = threading.Thread(target=self.execute)
+    self._add_continuation(self._initial_fetch, ())
+    thread = threading.Thread(target=self._execute)
     thread.start()
 
-  def execute(self):
+  def _execute(self):
+    while self.continuations:
+      continuation, args = self.continuations.pop(0)
+      try:
+        continuation(*args)
+      except FacebookRateLimit as e:
+        app.logger.warn(("Exceeded the rate limit, consider increasing the delays " +
+            "(currently %d s). Sleeping 1 minute and retrying.") % self.delay)
+        self._add_continuation(continuation, args)
+        time.sleep(60)
+        app.logger.debug(".. continuing")
+      except Exception as e:
+        app.logger.warn("%s(%s) failed with %s" % (continuation, ", ".join(args),
+            traceback.format_exc()))
+    app.logger.debug("DONE!")
+
+  def _add_continuation(self, method, args):
+    self.continuations.append((method, args))
+
+  def _fetch_json(self, url):
+    time.sleep(self.delay) # prevent rate limiting
+    r = pool.request('GET', url)
+    j = json.loads(r.data)
+    if "error" in j:
+      error = j["error"]
+      if "code" in error and error["code"] == 613:
+        raise FacebookRateLimit(error["message"])
+      raise FacebookError(error["message"])
+    return j
+
+  def _initial_fetch(self):
     newest = Message.all().order("-creation_time").get()
     if newest:
       self.newest_msg = newest.creation_time
@@ -26,18 +69,11 @@ class MessageFetcher(object):
 
     request_url = ("https://graph.facebook.com/me/inbox" +
                    "?format=json&access_token=%s&limit=200" % self.user.access_token)
-    self._continue(request_url)
-    app.logger.debug("DONE!")
+    self._add_continuation(self._continue, (request_url,))
 
   def _continue(self, next_url):
     app.logger.debug(next_url)
-    time.sleep(2)
-    r = pool.request('GET', next_url)
-    j = json.loads(r.data)
-
-    if "error" in j:
-      print j["error"]
-      return
+    j = self._fetch_json(next_url)
 
     for conversation in j["data"]:
       if "comments" not in conversation:
@@ -63,21 +99,22 @@ class MessageFetcher(object):
 
       if new_msgs_left and "paging" in comments:
         next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-        self._parse_thread(contact, contact_id, next_page)
+        self._add_continuation(self._parse_thread, (contact, contact_id, next_page))
 
     if "paging" in j:
       request_url = j["paging"]["next"].replace("limit=25", "limit=200")
-      self._continue(request_url)
+      self._add_continuation(self._continue, (request_url,))
 
   def _parse_thread(self, partner, partner_id, next_page):
     app.logger.debug(next_page)
-    time.sleep(2)
-    comments = json.loads(pool.request('GET', next_page).data)
+    comments = self._fetch_json(next_page)
+    if 'data' not in comments:
+      app.logger.debug(comments)
     new_msgs_left = self._parse_messages(partner, partner_id, comments["data"])
 
     if new_msgs_left and "paging" in comments:
       next_page = comments["paging"]["next"].replace("limit=25", "limit=200")
-      self._parse_thread(partner, partner_id, next_page)
+      self._add_continuation(self._parse_thread, (partner, partner_id, next_page))
 
   def _parse_messages(self, partner, partner_id, messages):
     new_msgs_left = True

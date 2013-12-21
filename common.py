@@ -13,9 +13,7 @@ class MyPoolManager(urllib3.PoolManager):
     mod = f.f_code.co_filename
     lineno = f.f_lineno
 
-    logging.info("Calling %s with %s from %s.%d" % (url, fields, mod, lineno))
     r = super(MyPoolManager, self).request_encode_url(method, url, fields=fields)
-    logging.info("Reply: %s" % r.data)
     return r
 
 pool = MyPoolManager()
@@ -43,7 +41,6 @@ def require_login():
 
       user = User.get(session['user_key'])
       if not user:
-        app.logger.debug("Invalid User: %s for %s" % (user, session['user_key']))
         session.pop('user_key', None)
         return redirect(url_for('index'))
 
